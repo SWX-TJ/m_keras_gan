@@ -1,0 +1,1 @@
+this folder used for show train phase log info
