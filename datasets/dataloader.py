@@ -57,14 +57,6 @@ class TfRecordDatasetsLoader(BaseDatasetsLoader):
                     img_pose_quart = Rotation.from_matrix(img_pose_R).as_quat()
                     img_pose = np.concatenate([img_pose_t,img_pose_quart])
                     img_name_pose_dict[img_name]=img_pose
-                    print("readline-->",pair_file_context.split(" "))
-                    print("type-->",type(context_splits))
-                    print("img_name-->",img_name)
-                    print("img_pose_len-->",len(img_pose_t))
-                    print("img_pose_quart-->",img_pose_t,img_pose_quart)
-                    print("img_pose--->",img_pose)
-            print(img_name_pose_dict.keys())
-            print(img_name_pose_dict.values())
             return img_name_pose_dict
         #1.read image_label
         train_labels = []
@@ -76,16 +68,43 @@ class TfRecordDatasetsLoader(BaseDatasetsLoader):
                         if sub_dir.find("tfrecords")<0:
                             train_labels.append(sub_dir)
         #2.read image and pose
+        train_data_dict = dict()
         for per_label in train_labels:
                 train_data_file_path = os.path.join(self.Origin_Train_FIle_Path,per_label)
                 #print("current traindata_path-->",train_data_file_path)
                 for _,_,file_lists in os.walk(train_data_file_path):
-                    print("len_file_lists",len(file_lists))
                     for file in file_lists:
                         if file.find("_par")>0:
                             train_data_file_path = os.path.join(train_data_file_path,file)
                             train_data_img_pose_dict = ParseTxtFunc(train_data_file_path)
-                            
+                            train_data_dict[per_label]=train_data_img_pose_dict
+        #3.saved traindata in TFRecord
+        tfrecord_file_name = os.path.join(self.Save_Train_FIle_Path,"TrainData.tfrecords")
+        traindata_writer = tf.io.TFRecordWriter(tfrecord_file_name)
+        for label in train_data_dict:
+            for img_name in train_data_dict[label]:
+                img_path = os.path.join(os.path.join(self.Origin_Train_FIle_Path,label),img_name)
+                img =  tf.io.read_file(img_path)
+                img_pose = train_data_dict[label][img_name]
+                img_label = label.encode('utf-8')
+                sample = tf.train.Example(
+                    features=tf.train.Features(
+                        feature={
+                                'img': tf.train.Feature(bytes_list=tf.train.BytesList(value=[bytes(img.numpy())])),
+                                'img_pose': tf.train.Feature(float_list=tf.train.FloatList(value=img_pose)),
+                                'img_label': tf.train.Feature(bytes_list=tf.train.BytesList(value=[img_label]))
+                            }
+                        )
+                    )
+                traindata_writer.write(sample.SerializeToString())
+        traindata_writer.close()
+        print("Make Traindata Finished!\r\n")
+
+
+
+
+
+
 
 
                 
