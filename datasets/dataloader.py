@@ -35,15 +35,48 @@ class TfRecordDatasetsLoader(BaseDatasetsLoader):
                 os.makedirs(self.Save_Train_FIle_Path)
         elif len(Origin_FIle_Path)==0:
             raise Exception("The Origin_FIle_Path is not correct,Please Check it!",Origin_FIle_Path)
+    def ParseImgPoseTxtFIle(self,txt_file):
+        pair_info = open(txt_file, "r")
+        pair_file_context = pair_info.readline()
+        line_count = 0
+        while pair_file_context:
+            pair_file_context = pair_info.readline()
+            line_count = line_count+1
+            print("readline-->",pair_file_context)
+
     def MakeTrainDatasets(self):
         '''rewrite your traindatasets make function,in this example, I rewrite this function for my own mvs-datasets'''
         #1.read image_label
-        for home_dirs,dir_list,file_list in os.walk(self.Origin_Train_FIle_Path):
+        train_labels = []
+        for home_dirs,dir_lists,file_lists in os.walk(self.Origin_Train_FIle_Path):
             print("home_dirs-->",home_dirs)
-            print("dir_list-->",dir_list)
-            print("file_list-->",file_list)
+            # print("dir_list-->",dir_lists)
+            # print("file_list-->",file_list)
+            #1.get labels from folder name
+            if home_dirs ==self.Origin_Train_FIle_Path:
+                if len(dir_lists)>=1:
+                    for sub_dir in dir_lists:
+                        if sub_dir.find("tfrecords")<0:
+                            train_labels.append(sub_dir)
+        #2.read image and pose
+        for per_label in train_labels:
+                train_data_file_path = os.path.join(self.Origin_Train_FIle_Path,per_label)
+                print("current traindata_path-->",train_data_file_path)
+                for _,_,file_lists in os.walk(train_data_file_path):
+                    print("len_file_lists",len(file_lists))
+                    for file in file_lists:
+                        if file.find("_ang")>0:
+                            print("image_and_pose file-->",file);
+                            ParseImgPoseTxtFIle(file);
+
+
+                
+            
+            
+
+
         
-        
+
 
 
     
@@ -52,5 +85,5 @@ class TfRecordDatasetsLoader(BaseDatasetsLoader):
 
 #########################################Test Module#######################################################
 if __name__ =="__main__":
-    m_tfrecorddataloader = TfRecordDatasetsLoader(["datasets/temp_and_dino_datasets"],["datasets/temp_and_dino_datasets/traindatasets_tfrecords"])
+    m_tfrecorddataloader = TfRecordDatasetsLoader(["/home/swx/m_mode_datasets/temp_and_dino_datasets"],["/home/swx/m_mode_datasets/temp_and_dino_datasets/traindatasets_tfrecords"])
     m_tfrecorddataloader.MakeTrainDatasets()
