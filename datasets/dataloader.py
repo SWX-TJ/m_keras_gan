@@ -2,6 +2,8 @@ import tensorflow as tf
 import os
 from scipy.spatial.transform import Rotation
 import numpy as np
+import random
+import matplotlib.image as mp
 
 '''Base DatasetsLoader Class'''
 class BaseDatasetsLoader:
@@ -15,6 +17,7 @@ class BaseDatasetsLoader:
         print("get traindatasets")
     def GetTestDatasets(self):
         print("get testdatasets")
+
 
 class TfRecordDatasetsLoader(BaseDatasetsLoader):
     def __init__(self, Origin_FIle_Path=[],Save_File_Path=[],name='TfRecordDatasetsLoader'):
@@ -71,7 +74,6 @@ class TfRecordDatasetsLoader(BaseDatasetsLoader):
         train_data_dict = dict()
         for per_label in train_labels:
                 train_data_file_path = os.path.join(self.Origin_Train_FIle_Path,per_label)
-                #print("current traindata_path-->",train_data_file_path)
                 for _,_,file_lists in os.walk(train_data_file_path):
                     for file in file_lists:
                         if file.find("_par")>0:
@@ -99,10 +101,39 @@ class TfRecordDatasetsLoader(BaseDatasetsLoader):
                 traindata_writer.write(sample.SerializeToString())
         traindata_writer.close()
         print("Make Traindata Finished!\r\n")
+    def ReadTrainDatasets(self,is_need_dataaug= True,is_center_crop=True,Center_Crop_Size=(128,128)):
+        tfrecordfile_path = ' '
+        #1.get tfrecordfile_path
+        for home_list,dir_list,file_list in os.walk(self.Save_Train_FIle_Path):
+            tfrecordfile_path = os.path.join(home_list,file_list[0])
+        #2.parse tfrecordfile
+        def parse_sample(example_proto):
+            description = {
+                'img':tf.io.FixedLenFeature([],tf.string),
+                'img_pose':tf.io.FixedLenFeature([7],tf.float32),
+                'img_label':tf.io.FixedLenFeature([],tf.string),
+            }
+            sample = tf.io.parse_single_example(example_proto,description)
+            img = tf.image.decode_png(sample['img'],3)
+            #self.Data_Auguments(img,is_need_dataaug,is_center_crop,Center_Crop_Size)
+            img_pose = sample['img_pose']
+            img_label = sample['img_label']
+            return img,img_pose,img_label
+        train_datasets = tf.data.TFRecordDataset(
+            tfrecordfile_path).map(parse_sample)
+        return train_datasets
 
 
-
-
+def Data_Auguments(traindata,is_need_dataaug=True,is_need_crop=True,croped_size=(128,128)):
+        img,img_pose,img_label = traindata
+        if is_need_crop:
+            img_height,img_width,_ =img.shape
+            offset_height = random.randint(croped_size[0],img_height-croped_size[0])
+            offset_width = random.randint(croped_size[1],img_width-croped_size[1])
+            img = tf.image.crop_to_bounding_box(img,offset_height,offset_width,croped_size[0],croped_size[1])
+        if is_need_dataaug:
+            img = tf.image.random_brightness(img,0.2)
+        return img,img_pose,img_label 
 
 
 
@@ -123,4 +154,10 @@ class TfRecordDatasetsLoader(BaseDatasetsLoader):
 #########################################Test Module#######################################################
 if __name__ =="__main__":
     m_tfrecorddataloader = TfRecordDatasetsLoader(["/home/swx/m_mode_datasets/temp_and_dino_datasets"],["/home/swx/m_mode_datasets/temp_and_dino_datasets/traindatasets_tfrecords"])
-    m_tfrecorddataloader.MakeTrainDatasets()
+    traindataloader = m_tfrecorddataloader.ReadTrainDatasets()
+    for i in traindataloader.take(1):
+        i = Data_Auguments(i,True)
+        print("img_shape--->",i[0].shape)
+        mp.imsave("traindata_{}.png".format(0),i[0].numpy())
+        print(i[1].numpy())
+        print(str(i[2]))
