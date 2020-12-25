@@ -34,12 +34,8 @@ class CondtionBatchNorm(layers.Layer):
         gama = self.gamma(condition)
         bta = self.beta(condition)
         for i in range(n_dim - 2):
-            # print("gama_shape-->",tf.shape(gama))
-            # print("bta_shape-->",tf.shape(bta))
             gama = tf.expand_dims(gama, axis = 1)
             bta = tf.expand_dims(bta, axis = 1)
-        # print("f_gama_shape-->",tf.shape(gama))
-        # print("f_bta_shape-->",tf.shape(bta))
         return x * gama + bta
 
 class Global_Sum_Pooling(layers.Layer):

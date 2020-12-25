@@ -9,16 +9,16 @@ class Generator(Model):
         super(Generator,self).__init__(name=name)
         self.nums_cls = nums_cls
         self.gf_dim = gf_dim
-        self.embed = layers.Embedding(self.nums_cls,128,name='embed_y')
+        self.embed = layers.Embedding(self.nums_cls,latent_z_dim,name='embed_y')
         self.dense = layers.Dense(gf_dim*8*8*8,name='dense')
         self.cbn_1 = CondtionBatchNorm(gf_dim*8,name='cbn1')
-        self.deconv_1 = layers.Conv2DTranspose(gf_dim*4,4,(2,2),'same',kernel_initializer=tf.keras.initializers.RandomNormal(mean=0,stddev = 0.02))
+        self.deconv_1 = layers.Conv2DTranspose(gf_dim*4,4,(2,2),'same',kernel_constraint=spectral_normalization,kernel_initializer=tf.keras.initializers.RandomNormal(mean=0,stddev = 0.02))
         self.cbn_2 =CondtionBatchNorm(gf_dim*4,name='cbn2')
-        self.deconv_2 = layers.Conv2DTranspose(gf_dim*2,4,(2,2),'same',kernel_initializer=tf.keras.initializers.RandomNormal(mean=0,stddev = 0.02))
+        self.deconv_2 = layers.Conv2DTranspose(gf_dim*2,4,(2,2),'same',kernel_constraint=spectral_normalization,kernel_initializer=tf.keras.initializers.RandomNormal(mean=0,stddev = 0.02))
         self.cbn_3 = CondtionBatchNorm(gf_dim*2,name='cbn3')
-        self.deconv_3 = layers.Conv2DTranspose(gf_dim,4,(2,2),'same',kernel_initializer=tf.keras.initializers.RandomNormal(mean=0,stddev = 0.02))
+        self.deconv_3 = layers.Conv2DTranspose(gf_dim,4,(2,2),'same',kernel_constraint=spectral_normalization,kernel_initializer=tf.keras.initializers.RandomNormal(mean=0,stddev = 0.02))
         self.cbn_4 = CondtionBatchNorm(gf_dim,name='cbn4')
-        self.deconv_4 = layers.Conv2DTranspose(3,4,(2,2),'same',kernel_initializer=tf.keras.initializers.RandomNormal(mean=0,stddev = 0.02))
+        self.deconv_4 = layers.Conv2DTranspose(3,4,(2,2),'same',kernel_constraint=spectral_normalization,kernel_initializer=tf.keras.initializers.RandomNormal(mean=0,stddev = 0.02))
     def call(self,inputs,training=None):
         x,c = inputs
         embed_c = self.embed(c)
@@ -60,7 +60,7 @@ class Discriminator(Model):
 
     def call(self,inputs,training=None):
         x,c = inputs
-        embed_c = self.embed(c)
+        embed_c = spectral_normalization(self.embed(c))
         x = self.conv_1(x)
         x = self.sbn1(x,training)
         x = tf.nn.leaky_relu(x)
@@ -74,9 +74,10 @@ class Discriminator(Model):
         x = self.sbn4(x,training)
         x = tf.nn.leaky_relu(x)
         h = self.gsp(x)
-        h = self.inner_prouduct([embed_c,h])
-        output_real_fake = self.sdense(h)
         output_pose = self.pdense(h)
+        output_real_fake = self.sdense(h)
+        h = self.inner_prouduct([embed_c,h])
+        output_real_fake = output_real_fake+h 
         return output_real_fake,output_pose
        
         
@@ -85,7 +86,7 @@ class PoseGAN:
                 batch_size = 32,
                 g_learning_rate = 1e-4,
                 d_learning_rate = 1e-4,
-                g_loss_beta1 = 0.5,
+                g_loss_beta1 = 10,
                 g_loss_beta2 = 0.5,
                 tflog_dirs = None,
                 traindataset_loader=None,
@@ -127,7 +128,7 @@ class PoseGAN:
             fake_image = self.g_net([real_pose,label],False)
             fake_logit,fake_pred_pose = self.d_net([fake_image,label],True)
             real_logit,real_pred_pose = self.d_net([real_img,label],True)
-            d_loss = DiscriminatorLoss(fake_logit,real_logit,real_pose,real_pred_pose)
+            d_loss = DiscriminatorLoss(fake_logit,real_logit,real_pose,real_pred_pose,fake_pred_pose)
         gradients = tape.gradient(d_loss,self.d_net.trainable_variables)
         self.d_opt.apply_gradients(zip(gradients,self.d_net.trainable_variables))
         d_out = {
@@ -162,16 +163,7 @@ class PoseGAN:
                         tf.summary.image('real_images', batch_traindata[0],
                                  step=train_step_idx*1000+train_step,max_outputs=4)
                         summary_writer.flush()
-            train_step+=1
-
-
-
-
-
-
-
-
-        
+            train_step+=1 
     def predict(self):
         pass
 
